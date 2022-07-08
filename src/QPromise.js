@@ -1,7 +1,7 @@
 /**
- * V0.9版,在里面加入 如下功能:
- *  (1) 如果一个QPromise变为rejected状态,而且没有被其他QPromise处理,则最终冒泡到控制台,打印unCaught Error.
- *  (2) 无论是在onFulfilled函数里还是onRejected函数里抛出异常,都会导致QPromise实例变为reject状态
+ * V1.0.0版.
+ * 
+ * 
  * 
  */
 
