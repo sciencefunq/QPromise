@@ -1,5 +1,5 @@
 /**
- * V1.0.2版.
+ * V1.0.3版.
  * 
  * 
  * 
@@ -27,6 +27,9 @@ class QPromise {
   }
 
 
+  /* 传入的executor不是function 抛出异常;
+      executor在执行过程中如果同步的抛出异常,且此时QPromise处于pending状态,则以抛出的异常为理由拒绝QPromise.
+  */
   constructor(executor){
     this.status="pending";
     this.onFulfilledQueue=[];
@@ -46,9 +49,12 @@ class QPromise {
   }
 
 
+  /*
+  一个QPromise 如果fulfilled,则其result 不能是自身,不能是其他QPromise对象,也不能是thenable对象
+   */
 
   _resolve(result){
-
+    //一个QPromise不能resolve自身
     if(result===this) 
       throw new TypeError("illegal parameter of resolve method");
 
@@ -68,7 +74,7 @@ class QPromise {
       return;
     }
 
-    //maybe thenable object
+    //处理对象,对象有可能是 thenable object
     let type=typeof result;
     if( result && (type==="object" || type==="function")){
       try{
@@ -84,6 +90,7 @@ class QPromise {
           return;
         }
 
+        //对象是一个thenable对象,则异步的调用其then方法.
         queueMicrotask(()=> then.call(result,res=>this.resolve(res),err=>this.reject(err)));
 
       }catch(e){
@@ -103,6 +110,9 @@ class QPromise {
   }
 
 
+/*
+  可以以任何理由reject一个QPromise,包括原始值/对象/undefined/null/该QPromise自身/其他QPromise对象或thenable对象.
+*/
   _reject(reason){
     if(this.status!=="pending") return;
 
@@ -120,7 +130,12 @@ class QPromise {
   }
 
 
-
+/**
+ * QPromise的then方法和resolve方法是最核心的方法,也是不同Promise实现兼容的基础. 
+ * e.g.  QPromise在resolve一个原生Promise对象时,会调用原生Promise对象的then方法,当原生Promise为拒绝状态,则QPromise为拒绝状态,当原* 生Promise为reject状态,则以其拒绝理由作为拒绝理由 reject QPromise.
+ * 
+ * 同样原生Promise在resolve一个QPromise对象时,也会调用QPromise的then方法,同样实现了将QPromise的状态传递给Promise对象.
+ */
   then(onFulfilled,onRejected){
     
     onFulfilled = (typeof onFulfilled==="function") ? onFulfilled : res=>res ;
@@ -172,11 +187,16 @@ class QPromise {
 
   }
 
+  
+/* catch 方法是then方法的包装实现
+ */
   catch(onRejected){
     return this.then(undefined,onRejected);
   }
 
 
+  /* finally 方法是then方法的包装实现
+ */
   finally(finalFn){
     let onFulfilled = (typeof finalFn === "function") ? res=>{ finalFn(); return res;} : res=> res;
 
@@ -205,23 +225,25 @@ class QPromise {
     return new QPromise((resolve,reject)=>{
       let resultArray=[];
       let index=0;
-      let notQPromiseCount=0;
-      let QPromiseCount=0;
+
       for(const qp of iterableObj){
         let thisIndex=index++;
         
         if(qp instanceof QPromise){
-          QPromiseCount++;
           qp.then(res=>{
             resultArray[thisIndex]=qp.result;
-           
-            if(--QPromiseCount===0) {
+            if(--index===0) {
               resolve(resultArray);
             }
           },err=>reject(err));
+
         }else {
-          notQPromiseCount++;
-          resultArray[thisIndex]=qp;
+
+           //如果传入的参数不包含任何 QPromise，则返回一个异步完成（asynchronously resolved）
+          QPromise.resolve(qp).then(res=>{
+            resultArray[thisIndex]=res;
+            if(--index===0) resolve(resultArray);
+          }, err=>reject(err));
         }
       }
 
@@ -230,9 +252,7 @@ class QPromise {
         resolve([]);
       }
 
-       //如果传入的参数不包含任何 QPromise，则返回一个异步完成（asynchronously resolved）
-      if(notQPromiseCount===index)
-        queueMicrotask(()=>resolve(resultArray));
+      
     });
   }
 
@@ -241,30 +261,42 @@ class QPromise {
     return new QPromise((resolve,reject)=>{
       let resultArray=[];
       let index=0;
-      let notQPromiseCount=0;
-      let QPromiseCount=0;
+      // let notQPromiseCount=0;
+      let rejectionCount=0;
 
       for(const qp of iterableObj){
         const thisIndex=index++;
+        rejectionCount++;
         if(qp instanceof QPromise){
-          QPromiseCount++;
+
           qp.then(res=>{
             resultArray[thisIndex]={status:"fulfilled",result:res};
-            if(--QPromiseCount===0) 
+            if(--index===0) 
               resolve(resultArray);
           },err=>{
             resultArray[thisIndex]={status:"rejected",reason:err};
-            if(--QPromiseCount===0) 
+            if(--index===0) 
               resolve(resultArray);
           });
         }else{
-          notQPromiseCount++;
-          resultArray[thisIndex]={status:"fulfilled",result:qp};
+          QPromise.resolve(qp).then(res=>{
+            resultArray[thisIndex]={status:"fulfilled",result:res};
+            if(--index===0) resolve(resultArray);
+          }, err=>{
+            resultArray[thisIndex]={status:"rejected",reason:err};
+           
+            if(--rejectionCount===0){
+              reject(resultArray);
+            }
+            if(--index===0) {
+              resolve(resultArray);
+            }
+          });
+         
         };
 
         if(index===0) resolve([]);
 
-        if(notQPromiseCount===index) queueMicrotask(()=>resolve(resultArray));
       }
     });
   }
@@ -274,26 +306,27 @@ class QPromise {
     return new QPromise((resolve,reject)=>{
       let resultArray=[];
       let index=0;
-      let notQPromiseCount=0;
-      let QPromiseCount=0;
 
       for(const qp of iterableObj){
         const thisIndex=index++;
 
         if(qp instanceof QPromise){
-          QPromiseCount++;
           qp.then(res=>{
             resolve(res);
           },err=>{
             resultArray[thisIndex]=err;
-            if(--QPromiseCount===0){
+            if(--index===0){
               let error=new AggregateError(resultArray,"All promises were rejected");
               reject(error);
             }
           });
         }else {
-          notQPromiseCount++;
-          queueMicrotask(()=>resolve(qp));
+          QPromise.resolve(qp).then(res=>{
+              resolve(res);
+          }, err=>{
+            resultArray[thisIndex]=err;
+            if(--index===0)  reject(resultArray);
+          });
         }
        
       }
@@ -314,7 +347,7 @@ class QPromise {
         if(qp instanceof QPromise){
           qp.then(res=>resolve(res) ,err=>reject(err));
         }else {
-          queueMicrotask(()=>resolve(qp));
+          QPromise.resolve(qp).then(res=>resolve(res) ,err=>reject(err));
         }
         
       }
