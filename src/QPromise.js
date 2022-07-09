@@ -1,10 +1,9 @@
 /**
- * V1.0.3版.
+ * V1.0.4版.
  * 
  * 
  * 
  */
-
 
 
 class QPromise {
@@ -218,7 +217,6 @@ class QPromise {
     return new QPromise((_,reject)=>reject(reason));
   }
 
-
   //静态 all 方法
   static all(iterableObj){
    
@@ -228,31 +226,18 @@ class QPromise {
 
       for(const qp of iterableObj){
         let thisIndex=index++;
-        
-        if(qp instanceof QPromise){
-          qp.then(res=>{
-            resultArray[thisIndex]=qp.result;
-            if(--index===0) {
-              resolve(resultArray);
-            }
-          },err=>reject(err));
-
-        }else {
-
            //如果传入的参数不包含任何 QPromise，则返回一个异步完成（asynchronously resolved）
           QPromise.resolve(qp).then(res=>{
             resultArray[thisIndex]=res;
             if(--index===0) resolve(resultArray);
           }, err=>reject(err));
-        }
+        
       }
 
       //如果iterableObj是空集合,则必须返回一个已完成（already resolved）
       if (index===0){
         resolve([]);
       }
-
-      
     });
   }
 
@@ -261,44 +246,30 @@ class QPromise {
     return new QPromise((resolve,reject)=>{
       let resultArray=[];
       let index=0;
-      // let notQPromiseCount=0;
       let rejectionCount=0;
 
       for(const qp of iterableObj){
         const thisIndex=index++;
         rejectionCount++;
-        if(qp instanceof QPromise){
-
-          qp.then(res=>{
-            resultArray[thisIndex]={status:"fulfilled",result:res};
-            if(--index===0) 
-              resolve(resultArray);
-          },err=>{
-            resultArray[thisIndex]={status:"rejected",reason:err};
-            if(--index===0) 
-              resolve(resultArray);
-          });
-        }else{
-          QPromise.resolve(qp).then(res=>{
-            resultArray[thisIndex]={status:"fulfilled",result:res};
-            if(--index===0) resolve(resultArray);
-          }, err=>{
-            resultArray[thisIndex]={status:"rejected",reason:err};
-           
-            if(--rejectionCount===0){
-              reject(resultArray);
-            }
-            if(--index===0) {
-              resolve(resultArray);
-            }
-          });
-         
+       
+        QPromise.resolve(qp).then(res=>{
+          resultArray[thisIndex]={status:"fulfilled",result:res};
+          if(--index===0) resolve(resultArray);
+        }, err=>{
+          resultArray[thisIndex]={status:"rejected",reason:err};
+          
+          if(--rejectionCount===0){
+            reject(resultArray);
+          }
+          if(--index===0) {
+            resolve(resultArray);
+          }
+        });
         };
 
         if(index===0) resolve([]);
 
-      }
-    });
+      });
   }
 
   //静态 any 方法
@@ -310,25 +281,16 @@ class QPromise {
       for(const qp of iterableObj){
         const thisIndex=index++;
 
-        if(qp instanceof QPromise){
-          qp.then(res=>{
-            resolve(res);
-          },err=>{
-            resultArray[thisIndex]=err;
-            if(--index===0){
-              let error=new AggregateError(resultArray,"All promises were rejected");
-              reject(error);
-            }
-          });
-        }else {
-          QPromise.resolve(qp).then(res=>{
-              resolve(res);
-          }, err=>{
-            resultArray[thisIndex]=err;
-            if(--index===0)  reject(resultArray);
-          });
-        }
-       
+        QPromise.resolve(qp).then(res=>{
+          resolve(res);
+        },
+        err=>{
+          resultArray[thisIndex]=err;
+          if(--index===0){
+            let error=new AggregateError(resultArray,"All promises were rejected");
+            reject(error);
+          }
+        });
       }
 
       if(index===0){
@@ -342,14 +304,8 @@ class QPromise {
   //传入空iterableObj将导致QPromise永远处于pending状态
   static race(iterableObj){
     return new QPromise((resolve,reject)=>{
-
       for(const qp of iterableObj){
-        if(qp instanceof QPromise){
-          qp.then(res=>resolve(res) ,err=>reject(err));
-        }else {
-          QPromise.resolve(qp).then(res=>resolve(res) ,err=>reject(err));
-        }
-        
+        QPromise.resolve(qp).then(res=>resolve(res) ,err=>reject(err));
       }
     });
   }
