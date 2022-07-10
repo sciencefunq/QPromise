@@ -1,10 +1,9 @@
 /**
- * V1.0.4版.
+ * V1.0.5版.
  * 
  * 
  * 
  */
-
 
 class QPromise {
 
@@ -28,6 +27,7 @@ class QPromise {
 
   /* 传入的executor不是function 抛出异常;
       executor在执行过程中如果同步的抛出异常,且此时QPromise处于pending状态,则以抛出的异常为理由拒绝QPromise.
+      如果executor 异步抛出异常,且没有被捕获,异常冒泡到控制台;QPromise保持抛出异常前的状态.
   */
   constructor(executor){
     this.status="pending";
@@ -36,7 +36,6 @@ class QPromise {
     this.resolve=this._resolve.bind(this);
     this.reject=this._reject.bind(this);
 
-   
     if(typeof executor!=="function")
       throw new TypeError();
 
@@ -63,8 +62,8 @@ class QPromise {
     //当前QPromise对象的状态依赖另外一个QPromise
     if(result instanceof QPromise){
       if(result.status==="pending"){
-        result.onFulfilledQueue.push(res=>this.resolve(res));
-        result.onRejectedQueue.push(err=>this.reject(err));
+        result.onFulfilledQueue.push(res=>this.resolve(res));  //简写  result.onFulfilledQueue.push(this.resolve);
+        result.onRejectedQueue.push(err=>this.reject(err));   //简写  result.onRejectedQueue.push(this.reject);
       }else if(result.status==="fulfilled"){
         queueMicrotask(()=>this.resolve(result.result));
       }else if(result.status==="rejected"){
@@ -90,7 +89,9 @@ class QPromise {
         }
 
         //对象是一个thenable对象,则异步的调用其then方法.
-        queueMicrotask(()=> then.call(result,res=>this.resolve(res),err=>this.reject(err)));
+        //另一种写法 queueMicrotask(()=> then.call(result,res=>this.resolve(res),err=>this.reject(err)));
+        queueMicrotask(()=> then.call(result,this.resolve,this.reject));
+        
 
       }catch(e){
         this.reject(e);
@@ -111,6 +112,7 @@ class QPromise {
 
 /*
   可以以任何理由reject一个QPromise,包括原始值/对象/undefined/null/该QPromise自身/其他QPromise对象或thenable对象.
+  reject一个thenable对象或者一个QPromise对象是同步的,和原生Promise的实现保持一致
 */
   _reject(reason){
     if(this.status!=="pending") return;
@@ -131,7 +133,7 @@ class QPromise {
 
 /**
  * QPromise的then方法和resolve方法是最核心的方法,也是不同Promise实现兼容的基础. 
- * e.g.  QPromise在resolve一个原生Promise对象时,会调用原生Promise对象的then方法,当原生Promise为拒绝状态,则QPromise为拒绝状态,当原* 生Promise为reject状态,则以其拒绝理由作为拒绝理由 reject QPromise.
+ * e.g.  QPromise在resolve一个原生Promise对象时,会调用原生Promise对象的then方法,当原生Promise为拒绝状态,则QPromise为拒绝状态,当原* 生Promise为reject状态,则以其拒绝理由作为拒绝理由 拒绝 QPromise.
  * 
  * 同样原生Promise在resolve一个QPromise对象时,也会调用QPromise的then方法,同样实现了将QPromise的状态传递给Promise对象.
  */
@@ -234,7 +236,7 @@ class QPromise {
         
       }
 
-      //如果iterableObj是空集合,则必须返回一个已完成（already resolved）
+      //如果iterableObj是空集合,则必须返回一个已完成的QPromise（already resolved）
       if (index===0){
         resolve([]);
       }
@@ -293,6 +295,7 @@ class QPromise {
         });
       }
 
+      //如果传入的可迭代对象为空,返回一个被拒绝的QPromise
       if(index===0){
         let error=new AggregateError([],"All promises were rejected");
         reject(error);
