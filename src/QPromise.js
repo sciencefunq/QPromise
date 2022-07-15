@@ -10,19 +10,19 @@
   //实现控制台打印未被处理的rejected的QPromise功能
   // static allRejectedQPromise=new Set();
 
-  static {
-    setInterval(() => {
-      if(QPromise.allRejectedQPromise.size>0){
-        for(const reject of QPromise.allRejectedQPromise ){
-          setTimeout(() => {
-            QPromise.allRejectedQPromise.delete(reject);
-            throw reject.reason;
-          }, 0);
-        }
+  // static {
+  //   setInterval(() => {
+  //     if(QPromise.allRejectedQPromise.size>0){
+  //       for(const reject of QPromise.allRejectedQPromise ){
+  //         setTimeout(() => {
+  //           QPromise.allRejectedQPromise.delete(reject);
+  //           throw reject.reason;
+  //         }, 0);
+  //       }
         
-      }
-    }, 2000);
-  }
+  //     }
+  //   }, 2000);
+  // }
 
 
   /* 传入的executor不是function 抛出异常;
@@ -153,9 +153,9 @@
     this.reason=reason;
 
     //实现未被catch的处于rejected状态的QPromise最终冒泡到控制台功能.
-    if( this.onRejectedQueue.length===0){
-     QPromise.allRejectedQPromise.add(this);
-    }
+    // if( this.onRejectedQueue.length===0){
+    //  QPromise.allRejectedQPromise.add(this);
+    // }
 
     for(const fn of this.onRejectedQueue){
       queueMicrotask(()=>fn(this.reason));
@@ -206,7 +206,7 @@
       });
 
     }else if(this.status==="rejected"){
-      QPromise.allRejectedQPromise.delete(this);
+      // QPromise.allRejectedQPromise.delete(this);
       return new QPromise((resolve,reject)=>{
 
         queueMicrotask(()=>{
@@ -347,3 +347,5 @@
   }
 
 }
+
+module.exports=QPromise;
