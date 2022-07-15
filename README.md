@@ -1,5 +1,7 @@
 # QPromise
 
+<<<<<<< HEAD
+
 一个promise/A+ 规范实现
 
 ## Getting started
@@ -29,3 +31,14 @@ QPromise
 ## License
 
 MIT
+===
+
+一个promise A+规范实现
+
+>>>>>>> 4ba0de5e90436d2d388251a3d18a03c9c3370b40
+>>>>>>>
+>>>>>>
+>>>>>
+>>>>
+>>>
+>>
