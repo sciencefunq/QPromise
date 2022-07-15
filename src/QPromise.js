@@ -1,14 +1,14 @@
 /**
- * V1.0.5版.
- * 
+ * V1.0.6版.
+ * 这个版本完美的通过了npm上的promise-aplus-test程序
  * 
  * 
  */
 
-class QPromise {
+ class QPromise {
 
   //实现控制台打印未被处理的rejected的QPromise功能
-  static allRejectedQPromise=new Set();
+  // static allRejectedQPromise=new Set();
 
   static {
     setInterval(() => {
@@ -75,9 +75,10 @@ class QPromise {
     //处理对象,对象有可能是 thenable object
     let type=typeof result;
     if( result && (type==="object" || type==="function")){
+      let {resolvePromise, rejectPromise} = QPromise.getResolvePromiseFnAndRejectPromiseFn(this);
       try{
-        let then=result.then;
-        if(typeof then !=="function"){
+        let then$1=result.then;
+        if(typeof then$1 !=="function"){
           // result是一个对象,但是不是一个thenable对象
           this.status="fulfilled";
           this.result=result;
@@ -90,11 +91,23 @@ class QPromise {
 
         //对象是一个thenable对象,则异步的调用其then方法.
         //另一种写法 queueMicrotask(()=> then.call(result,res=>this.resolve(res),err=>this.reject(err)));
-        queueMicrotask(()=> then.call(result,this.resolve,this.reject));
+        // queueMicrotask(()=> then.call(result,this.resolve,this.reject));
         
+        //改进写法试一下:
+        // queueMicrotask(()=> {
+        //   try{
+        //     then.call(result,this.resolve,this.reject);
+        //   }catch(e){
+        //     this.reject(e);
+        //   }
+        // });
 
+        //按照Promise/A+规范,这里要这样写!!! 否则通过不了promise-aplus-test测试
+       
+        then$1.call(result,resolvePromise,rejectPromise);
+  
       }catch(e){
-        this.reject(e);
+        rejectPromise(e);
       }
       return;
     }
@@ -107,6 +120,25 @@ class QPromise {
     for(const fn of this.onFulfilledQueue){
       queueMicrotask(()=>fn(this.result));
     }
+  }
+
+  /**
+   * 这里要写这个一个静态方法,主要是为了保证在thenable对象中调用then的时候,最先的调用resolvePromise或rejectPromise阻止所有的后续调用,因为thenable对象中对resolvePromise的调用可能是多次的,而且每次的参数不一样,这里就是要保证,只有第一次的调用有效,所有的后续调用应为闭包里的hasCalled已经是true,都直接返回.
+   * 
+   */
+  static getResolvePromiseFnAndRejectPromiseFn(promise){
+    let hasCalled=false;
+    let resolvePromise=(y)=>{
+      if(hasCalled) return ;
+      hasCalled=true;
+      promise.resolve(y);
+    };
+    let rejectPromise=r=>{
+      if(hasCalled) return ;
+      hasCalled=true;
+      promise.reject(r);
+    }
+    return {resolvePromise,rejectPromise};
   }
 
 
@@ -154,7 +186,6 @@ class QPromise {
         });
 
         this.onRejectedQueue.push(()=>{
-          
           try{
             resolve(onRejected(this.reason));
           }catch(e){
@@ -162,6 +193,7 @@ class QPromise {
           }
         });
       });
+
     }else if(this.status==="fulfilled"){
       return new QPromise((resolve,reject)=>{
         queueMicrotask(()=>{
@@ -172,6 +204,7 @@ class QPromise {
           }
         });
       });
+
     }else if(this.status==="rejected"){
       QPromise.allRejectedQPromise.delete(this);
       return new QPromise((resolve,reject)=>{
@@ -222,14 +255,14 @@ class QPromise {
   //静态 all 方法
   static all(iterableObj){
    
-    return new QPromise((resolve,reject)=>{
+    return new QPromise((resolve,reject)=>{      //方便导出,可改写为: new This(....) 
       let resultArray=[];
       let index=0;
 
       for(const qp of iterableObj){
         let thisIndex=index++;
            //如果传入的参数不包含任何 QPromise，则返回一个异步完成（asynchronously resolved）
-          QPromise.resolve(qp).then(res=>{
+          QPromise.resolve(qp).then(res=>{       // 
             resultArray[thisIndex]=res;
             if(--index===0) resolve(resultArray);
           }, err=>reject(err));
@@ -314,6 +347,3 @@ class QPromise {
   }
 
 }
-
-
-
